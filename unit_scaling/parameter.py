@@ -5,10 +5,12 @@
 # mypy: disable-error-code="attr-defined, method-assign, no-untyped-call"
 
 from collections import OrderedDict
+import copy
 from typing import Any, Dict, Literal, Optional, Protocol, TypeGuard
 
 import torch
 from torch import Tensor, nn
+from torch.torch_version import TorchVersion
 
 MupType = Literal["weight", "bias", "norm", "output"]
 
@@ -74,6 +76,11 @@ def Parameter(
         assert p.mup_type == "weight"
         assert p.mup_scaling_depth is None
     """
+    if TorchVersion(torch.__version__) >= "2.8":
+        return UmupParameter(
+            data, mup_type=mup_type, mup_scaling_depth=mup_scaling_depth
+        )
+
     p = nn.Parameter(data)
     p.mup_type = mup_type
     p.mup_scaling_depth = mup_scaling_depth
@@ -81,3 +88,42 @@ def Parameter(
     p.__reduce_ex__ = _parameter_reduce_ex.__get__(p)
     # Note: cannot override __repr__ as it's __class__.__repr__
     return p
+
+
+class UmupParameter(nn.Parameter):
+    """
+    u-μP Parameter object
+
+    Supports the :class:`ParameterData` protocol:
+
+    >>> p = uu.UmupParameter(torch.zeros(10), mup_type="weight")
+    >>> assert p.mup_type == "weight"
+    >>> assert p.mup_scaling_depth is None
+    """
+
+    def __new__(
+        cls,
+        data: torch.Tensor,
+        mup_type: MupType = None,
+        mup_scaling_depth: Optional[int] = None,
+        requires_grad: bool = True,
+    ) -> "UmupParameter":
+        param = torch.Tensor._make_subclass(cls, data, requires_grad)
+        param.mup_type = mup_type
+        param.mup_scaling_depth = mup_scaling_depth
+        return param
+
+    def __deepcopy__(self, memo: Dict[int, Any]):
+        new_instance = self.__class__(
+            copy.deepcopy(self.data, memo),
+            mup_type=self.mup_type,
+            mup_scaling_depth=self.mup_scaling_depth,
+            requires_grad=self.requires_grad,
+        )
+        return new_instance
+
+    def __reduce_ex__(self, protocol: int):
+        return (
+            self.__class__,
+            (self.data, self.mup_type, self.mup_scaling_depth, self.requires_grad),
+        )

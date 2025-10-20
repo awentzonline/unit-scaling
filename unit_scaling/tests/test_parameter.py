@@ -6,12 +6,20 @@ import pickle
 import torch
 from torch import Tensor, empty, full, tensor
 from torch.testing import assert_close
+import pytest
 
-from ..parameter import Parameter, has_parameter_data
+from ..parameter import Parameter, UmupParameter, has_parameter_data
+
+
+TORCH_VERSION = torch.torch_version.TorchVersion(torch.__version__)
 
 
 def test_parameter() -> None:
     param = Parameter(torch.zeros(10), "weight")
+    _test_parameter(param)
+
+
+def _test_parameter(param) -> None:
     assert has_parameter_data(param)
     assert param.mup_type == "weight"
     assert param.mup_scaling_depth is None
@@ -36,7 +44,10 @@ def test_parameter() -> None:
 
 def test_parameter_compile() -> None:
     parameter = Parameter(empty(3), mup_type="norm")
+    _test_parameter_compile(parameter)
 
+
+def _test_parameter_compile(parameter) -> None:
     def update_parameter(mult: Tensor) -> Tensor:
         parameter.data.mul_(mult)
         return parameter
@@ -49,3 +60,15 @@ def test_parameter_compile() -> None:
     assert_close(update_parameter(tensor(0.5)), full((3,), 0.5))
     assert_close(update_parameter(tensor(8.0)), full((3,), 4.0))
     assert_close(update_parameter(parameter), full((3,), 16.0))
+
+
+@pytest.mark.skipif(TORCH_VERSION < "2.8", reason="Requires PyTorch >= 2.8")
+def test_umup_parameter() -> None:
+    param = UmupParameter(torch.zeros(10), "weight")
+    _test_parameter(param)
+
+
+@pytest.mark.skipif(TORCH_VERSION < "2.8", reason="Requires PyTorch >= 2.8")
+def test_umup_parameter_compile() -> None:
+    parameter = UmupParameter(empty(3), mup_type="norm")
+    _test_parameter_compile(parameter)
