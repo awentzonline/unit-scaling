@@ -3,13 +3,18 @@
 import copy
 import pickle
 
-import torch
-from torch import Tensor, empty, full, tensor
-from torch.testing import assert_close
 import pytest
+import torch
+from torch import Tensor, empty, full, nn, tensor
+from torch.testing import assert_close
 
-from ..parameter import Parameter, UmupParameter, has_parameter_data
-
+from ..parameter import (
+    UMUP_PARAM_COMPILE_MIN_TORCH_VERSION,
+    Parameter,
+    UmupParameter,
+    has_parameter_data,
+    param_config,
+)
 
 TORCH_VERSION = torch.torch_version.TorchVersion(torch.__version__)
 
@@ -62,13 +67,24 @@ def _test_parameter_compile(parameter) -> None:
     assert_close(update_parameter(parameter), full((3,), 16.0))
 
 
-@pytest.mark.skipif(TORCH_VERSION < "2.8", reason="Requires PyTorch >= 2.8")
 def test_umup_parameter() -> None:
     param = UmupParameter(torch.zeros(10), "weight")
     _test_parameter(param)
 
 
-@pytest.mark.skipif(TORCH_VERSION < "2.8", reason="Requires PyTorch >= 2.8")
+@pytest.mark.skipif(
+    TORCH_VERSION < UMUP_PARAM_COMPILE_MIN_TORCH_VERSION,
+    reason=f"Requires PyTorch >= {UMUP_PARAM_COMPILE_MIN_TORCH_VERSION}",
+)
 def test_umup_parameter_compile() -> None:
     parameter = UmupParameter(empty(3), mup_type="norm")
     _test_parameter_compile(parameter)
+
+
+def test_param_config_context_manager() -> None:
+    with param_config(use_umup_param=True):
+        param = Parameter(empty(3), mup_type="norm")
+        assert isinstance(param, UmupParameter)
+
+    param = Parameter(empty(3), mup_type="norm")
+    assert isinstance(param, nn.Parameter)

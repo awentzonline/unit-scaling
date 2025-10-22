@@ -4,8 +4,10 @@
 
 # mypy: disable-error-code="attr-defined, method-assign, no-untyped-call"
 
-from collections import OrderedDict
 import copy
+from collections import OrderedDict
+from contextlib import contextmanager
+from dataclasses import dataclass
 from typing import Any, Dict, Literal, Optional, Protocol, TypeGuard
 
 import torch
@@ -13,6 +15,28 @@ from torch import Tensor, nn
 from torch.torch_version import TorchVersion
 
 MupType = Literal["weight", "bias", "norm", "output"]
+
+
+@dataclass
+class ParamConfig:
+    use_umup_param: bool = False
+
+
+config = ParamConfig()
+
+
+@contextmanager
+def param_config(**kwargs):
+    prev = {}
+    for k, v in kwargs.items():
+        prev[k] = getattr(config, k, None)
+        setattr(config, k, v)
+
+    try:
+        yield
+    finally:
+        for k, v in prev.items():
+            setattr(config, k, v)
 
 
 class ParameterData(Protocol):
@@ -76,7 +100,8 @@ def Parameter(
         assert p.mup_type == "weight"
         assert p.mup_scaling_depth is None
     """
-    if TorchVersion(torch.__version__) >= "2.8":
+    # if TorchVersion(torch.__version__) >= UMUP_PARAM_COMPILE_MIN_TORCH_VERSION:
+    if config.use_umup_param:
         return UmupParameter(
             data, mup_type=mup_type, mup_scaling_depth=mup_scaling_depth
         )
@@ -88,6 +113,9 @@ def Parameter(
     p.__reduce_ex__ = _parameter_reduce_ex.__get__(p)
     # Note: cannot override __repr__ as it's __class__.__repr__
     return p
+
+
+UMUP_PARAM_COMPILE_MIN_TORCH_VERSION = "2.8"
 
 
 class UmupParameter(nn.Parameter):
