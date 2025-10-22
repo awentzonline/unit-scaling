@@ -100,8 +100,8 @@ def Parameter(
         assert p.mup_type == "weight"
         assert p.mup_scaling_depth is None
     """
-    # if TorchVersion(torch.__version__) >= UMUP_PARAM_COMPILE_MIN_TORCH_VERSION:
-    if config.use_umup_param:
+    if TorchVersion(torch.__version__) >= UMUP_PARAM_COMPILE_MIN_TORCH_VERSION:
+    # if config.use_umup_param:
         return UmupParameter(
             data, mup_type=mup_type, mup_scaling_depth=mup_scaling_depth
         )
